@@ -2,41 +2,38 @@ pragma solidity >= 0.5.0 < 0.7.0;
 
 import "./Owner.sol";
 
-contract ContainerExport is Owner {
+contract ContainerExport is Owner{
 
-  event NewCompany(string name, uint corporateId, Actors _actors);
-
-  enum Actors { trucker, forwarder, terminal }
+  event NewCompany(string _name, uint _corporateId);
+  event CheckContainer(string _message);
 
   struct Company {
     string name;
     uint corporateId;
-    Actors actors;
+    bool valid;
   }
+
+  uint public corporateId = 1;
 
   mapping (address => Company) public companies;
+  mapping (uint => address) public idToAddress;
+  mapping (address => string) containerID;
 
-  address[] public companyAddresses;
-
-  function createCompany(string memory _name, uint _corporateId, Actors _actors) public {
-# ist die Überprüfung noch notwendig, wenn ich den Owner habe? eher ja, weil so verhinntert
-# wird, dass mehr als eine Company angemeldet werden kann
-    for (uint i=0; i < companyAddresses.length; i++) {
-        require(msg.sender != companyAddresses[i]);
-    }
+  function createCompany(string memory _name) public {
+    require((address(msg.sender) != address(0))&&(companies[msg.sender].valid == false));
+    idToAddress[corporateId] = msg.sender;
     companies[msg.sender].name = _name;
-    companies[msg.sender].corporateId = _corporateId;
-    companies[msg.sender].actors = _actors;
-    emit NewCompany(_name, _corporateId, _actors);
-    companyAddresses.push(msg.sender);
+    companies[msg.sender].corporateId = corporateId;
+    companies[msg.sender].valid = true;
+    emit NewCompany(_name, corporateId);
+    corporateId++;
   }
 
-  function getAllCompanies() external view returns (address[] memory) {
-    return companyAddresses;
+  function sendContainerID(address _recipient, string memory _containerID) public {
+    containerID[_recipient] = _containerID;
   }
 
-  function getCompanyActor() external view returns (Actors) {
-    return companies[msg.sender].actors;
+  function readContainerID() external view returns (string memory) {
+    return containerID[msg.sender];
   }
-
 }
