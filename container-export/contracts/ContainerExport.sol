@@ -20,6 +20,7 @@ contract ContainerExport is Owner, ERC721{
   mapping (uint => address) public idToAddress;
   mapping (address => uint) containerToOwner;
   mapping (address => uint) ownerContainerCount;
+  mapping (uint => address) transferApprovals;
 
   function createCompany(string memory _name) public {
     require((address(msg.sender) != address(0))&&(companies[msg.sender].valid == false));
@@ -55,10 +56,17 @@ contract ContainerExport is Owner, ERC721{
   }
 
   function transferFrom(address _from, address _to, uint256 _tokenId) external payable {
-
+    require (containerToOwner[_tokenId] == msg.sender || transferApprovals[_tokenId] == msg.sender);
+    _transfer(_from, _to, _tokenId);
   }
 
-  function approve(address _approved, uint256 _tokenId) external payable{
+  modifier onlyOwnerOf(uint _containerID) {
+    require(msg.sender == containerToOwner[_containerID]);
+    _;
+  }
 
+  function approve(address _approved, uint256 _tokenId) external payable onlyOwnerOf(_tokenId) {
+    transferApprovals[_tokenId] = _approved;
+    emit Approval(msg.sender, _approved, _tokenId);
   }
 }
