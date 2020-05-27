@@ -38,6 +38,7 @@ contract ContainerExport is Owner, ERC721{
 
 #create new company
     function createCompany(string memory _name) public {
+      require((address(msg.sender) != address(0))&&(companies[msg.sender].valid == false));
       idToAddress[corporateId] = msg.sender;
       companies[msg.sender].name = _name;
       companies[msg.sender].corporateId = corporateId;
@@ -48,7 +49,7 @@ contract ContainerExport is Owner, ERC721{
 
 #create new container
     function createContainer(string memory _containerName) public {
-      require((address(msg.sender) != address(0))&&(container[msg.sender].valid == false));
+      #require((address(msg.sender) != address(0))&&(container[msg.sender].valid == false));
       containerToOwner[containerId] = msg.sender;
       container[msg.sender].containerName = _containerName;
       container[msg.sender].containerId = containerId;
