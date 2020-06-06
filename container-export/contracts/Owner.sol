@@ -1,34 +1,26 @@
 pragma solidity >= 0.5.0 < 0.7.0;
 
-contract ContainerExport {
+contract Owner {
 
-  event NewCompany(string name, uint corporateId);
+  address private owner;
 
-  struct Company {
-    string name;
-    uint corporateId;
+  event LogChangeOwner(address indexed sender, address indexed newOwner);
+
+  constructor() public {
+    owner = msg.sender;
   }
 
-  mapping (address => Company) public companies;
-  mapping (address => uint) ownerCompanyCount;
-
-  address[] public companyAddresses;
-
-  function createCompany(string memory _name, uint _corporateId) public {
-    require(ownerCompanyCount[msg.sender] == 0);
-    companies[msg.sender].name = _name;
-    companies[msg.sender].corporateId = _corporateId;
-    ownerCompanyCount[msg.sender]++;
-    emit NewCompany(_name, _corporateId);
-    companyAddresses.push(msg.sender);
+   modifier onlyOwner {
+      require(msg.sender == owner,"The sender must be the owner");
+      _;
   }
 
-  function getOwnerCompanyCount() public view returns (uint) {
-    return (ownerCompanyCount[msg.sender]);
-  }
 
-  function getAllCompanies() external view returns (address[] memory) {
-      return companyAddresses;
+  function changeOwner(address newOwner) public onlyOwner returns(bool success){
+      require(newOwner != address(0x0), "The address of the new owner should not be empty");
+      owner = newOwner;
+      emit LogChangeOwner(msg.sender, newOwner);
+      return true;
   }
 
 }
