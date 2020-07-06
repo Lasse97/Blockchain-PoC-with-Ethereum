@@ -1,116 +1,92 @@
 pragma solidity >= 0.5.0 < 0.7.0;
 
-import "./Owner.sol";
-import "./erc721.sol"
+import './Owner.sol';
+import './safemath.sol';
 
-contract ContainerExport is Owner, ERC721{
+contract ContainerExport is Owner {
+
+  using SafeMath for uint256;
 
   //Set up events
-event LogNewCompany(string name, uint corporateId);
-event LogNewContainer(string containerName, uint containerId);
-event LogCheckContainer(string message);
-event LogTransfer(address indexed from, address indexed to, uint256 indexed tokenId);
-event LogApproval(address indexed owner, address indexed approved, uint256 indexed tokenId);
+  event LogCompanyRegistered(address indexed company);
+  event LogCompanyDeregistered(address indexed company);
+  event LogNewContainer(bytes32 hash, string containerName, uint256 containerId);
+  event LogTransfer(bytes32 hash, address indexed from, address indexed to, uint256 containerId);
 
+  //Struct with properties of the container
+  struct Container {
+    address payable owner;
+    string containerName;
+    uint256 containerId;
+  }
 
-struct Company {
-  string name;
-  uint corporateId;
-  bool valid;
-}
+  //Setting up mappings
 
-struct Container {
-  string containerName;
-  uint containerId;
-  bool valid;
-}
-//global variable for corporate and containerId
-uint public corporateId = 1;
-uint public containerId = 1;
+  //Hash is assigned to a container
+  mapping (bytes32 => Container) public container;
+  //Saving the registered companies
+  mapping (address => bool) public companies;
+  //Counting the containers owned by a company
+  mapping (address => uint256) public ownerContainerCount;
 
-//mappings to assign addresses to the companies and containers
-mapping (address => Company) public companies;
-mapping (address => Container) public container;
-mapping (uint => address) public idToAddress;
-//mappings to track container
-mapping (uint256 => address) public containerToOwner;
-mapping (address => uint256) public ownerContainerCount;
-mapping (uint => address) public transferApprovals;
-mapping (string => uint) public containerNameToId;
+  //global variable containerId
+  uint256 public containerId = 1;
 
-mapping (bytes32 => Container) public containers;
+  //hash a password inside the contract
+  function generateHash(address company, bytes32 password) public pure returns(bytes32 hash){
+      require(company != address(0x0), "The address can't be 0x0");
+      require(password != "0", "The password can`t be 0");
+      hash = keccak256(abi.encodePacked(company,password));
+  }
 
-function hash(address exchange, bytes32 password) public view returns(bytes32 hash){
-    require(exchange != address(0x0), "The address can't be 0x0");
-    hash = keccak256(abi.encodePacked(exchange, password, address(this)));
+  //Register a company that can transfer containers. Only the contract owner may call the function.
+  //returns true if registration is successful
+  function registerCompany(address company) public returns (bool) {
+      require(company != address(0), "Company is the zero address");
+      require(!companies[company], "Company already registered");
+      companies[company] = true;
+      emit LogCompanyRegistered(company);
+      return true;
+  }
 
-}
+  //Deregister a company so that no more containers can be transferred. Only the contract owner may call the function.
+  //returns true if deregistration is successful
+  function deregisterCompany(address company) public onlyOwner returns (bool) {
+      require(companies[company], "Company not registered");
+      companies[company] = false;
+      emit LogCompanyDeregistered(company);
+      return true;
+  }
 
-modifier onlyNewCompany() {
-    require((address(msg.sender) != address(0))&&(companies[msg.sender].valid == false));
-    _;
-}
+  //Create new container and store in storage c with related hash
+  function createContainer(bytes32 hash, string memory containerName) public {
+    require(container[hash].owner == address(0x0), "Container already registered");
+    Container storage c = container[hash];
+    c.owner = msg.sender;
+    c.containerName = containerName;
+    c.containerId = containerId;
+    ownerContainerCount[msg.sender]++;
+    emit LogNewContainer(hash, containerName, containerId);
+    containerId++;
+  }
 
-//create new company
-function registerCompany(string memory name) public onlyNewCompany() {
-//  require((address(msg.sender) != address(0))&&(companies[msg.sender].valid == false));
-  idToAddress[corporateId] = msg.sender;
-  companies[msg.sender].name = name;
-  companies[msg.sender].corporateId = corporateId;
-  companies[msg.sender].valid = true;
-  emit LogNewCompany(name, corporateId);
-}
+  //Function to retrieve the number of containers of an owner
+  function balanceOf(address owner) external view returns (uint256) {
+    return ownerContainerCount[owner];
+  }
 
-///   modifier onlyNewContainer(string memory _containerName) {
-//        require();
-//      _;
-//    }
-//create new container
-function createContainer(string memory containerName) public {
-  //require((address(msg.sender) != address(0))&&(container[msg.sender].valid == false));
-  containerToOwner[containerId] = msg.sender;
-  container[msg.sender].containerName = containerName;
-  container[msg.sender].containerId = containerId;
-  container[msg.sender].valid = true;
-  ownerContainerCount[msg.sender]++;
-  containerNameToId[containerName] = containerId;
-  emit LogNewContainer(containerName, containerId);
-  containerId++;
-}
+  //container is assigned to owner
+  function ownerOf(bytes32 hash) external view returns (address) {
+    return container[hash].owner;
+  }
 
-function balanceOf(address owner) external view returns (uint256) {
-  return ownerContainerCount[owner];
-}
-
-//container is assigned to owner
-function ownerOf(uint256 tokenId) external view returns (address) {
-  return containerToOwner[tokenId];
-}
-
-//container is transferred from one company to another
-function _transfer(address from, address to, uint256 tokenId) private {
-  ownerContainerCount[to]++;
-  ownerContainerCount[from]--;
-  containerToOwner[tokenId] = to;
-  emit LogTransfer(from, to, tokenId);
-}
-
-function transferFrom(address from, address to, uint256 tokenId) external payable {
-//sender must be owner of the container or the sender has the transfer approval
-  require (containerToOwner[tokenId] == msg.sender || transferApprovals[tokenId] == msg.sender);
-  _transfer(from, to, tokenId);
-}
-
-//check if sender is owner of the container
-modifier onlyOwnerOf(uint containerID) {
-  require(msg.sender == containerToOwner[containerID]);
-  _;
-}
-
-//sender approved the transfer
-function approve(address approved, uint256 tokenId) external payable onlyOwnerOf(tokenId) {
-  transferApprovals[tokenId] = approved;
-  emit LogApproval(msg.sender, approved, tokenId);
-}
+  //Container is transferred from one company to another. Only the container owner can transfer the container.
+  function transferContainer(bytes32 hash, address payable from, address payable to) public payable {
+      require (container[hash].owner == msg.sender, "The sender must be the owner of the container");
+      ownerContainerCount[to]++;
+      ownerContainerCount[from]--;
+      container[hash].owner = to;
+      emit LogTransfer(hash, from, to, containerId);
+  }
 
 }
